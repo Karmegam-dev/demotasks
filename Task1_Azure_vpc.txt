@@ -1,0 +1,97 @@
+# configure the Azure cli
+    az account list
+    az account set --subscription 'Free Trial'
+    az provider register --namespace Microsoft.CloudShell
+
+# Create Resource Group
+    az group create --name demotask-rg --location southindia
+    az group list
+
+# Create virtual network1 with subnet
+    az network vnet create --address-prefixes 10.0.0.0/16 --name demotask-vnet1 --resource-group demotask-rg 
+    --subnet-name vnet1-subnet --subnet-prefixes 10.0.0.0/24
+
+# Create Security groups and rules then associate with subnet
+    az network nsg create --resource-group demotask-rg --name vpc1-sg
+
+    az network nsg rule create --resource-group demotask-rg --nsg-name vpc1-sg --name vpc1-HTTP 
+    --access Allow --protocol Tcp --direction Inbound --priority 100 --source-address-prefix Internet 
+    --source-port-range "*" --destination-address-prefix "*" --destination-port-range 80
+
+# ssh access restricted to few ip's
+    az network nsg rule create --resource-group demotask-rg --nsg-name vpc1-sg --name vpc1-SSH --access Allow 
+    --protocol Tcp --direction Inbound --priority 200 --source-address-prefix 157.51.114.33 20.219.148.23 
+    --source-port-range "*" --destination-address-prefix "*" --destination-port-range 22
+
+    az network vnet subnet update --vnet-name demotask-vnet1 --name vnet1-subnet --resource-group demotask-rg
+    --network-security-group vpc1-sg
+
+# Create nic with public ip for public access
+    az network public-ip create --resource-group demotask-rg --name vnet1-pub-ip
+
+    az network nic create --resource-group demotask-rg --name vnet1-nic1 --vnet-name demotask-vnet1 
+    --subnet vnet1-subnet --network-security-group vpc1-sg --public-ip-address vnet1-pub-ip
+
+# Create VM on the first VPC with public access
+    az vm create --resource-group demotask-rg --name vnet1-vm1 --nics vnet1-nic1 --image centos --admin-username pubuser 
+    --generate-ssh-keys  --public-ip-sku Basic
+
+# Create virtual network2 with subnet
+    az network vnet create --address-prefixes 192.168.0.0/16 --name demotask-vnet2 --resource-group demotask-rg 
+    --subnet-name vnet2-subnet --subnet-prefixes 192.168.0.0/24
+
+# Create Security groups and rules then associate with subnet
+    az network nsg create --resource-group demotask-rg --name vpc2-sg
+
+# Securty Group rule to allow access for vpc resource only 
+    az network nsg rule create --resource-group demotask-rg --nsg-name vpc2-sg --name vpc2-SSH --access Allow
+    --protocol Tcp --direction Inbound --priority 100 --source-address-prefix VirtualNetwork --source-port-range "*" 
+    --destination-address-prefix "*" --destination-port-range 22
+
+# Securty Group rule to deny all outbound trafic from subnet
+    az network nsg rule create --resource-group demotask-rg --nsg-name vpc2-sg --name vpc2-Deny --access Deny
+    --protocol Tcp --direction Outbound --priority 200 --source-address-prefix "*" --source-port-range "*" 
+    --destination-address-prefix "*" --destination-port-range "*"
+
+    az network vnet subnet update --vnet-name demotask-vnet2 --name vnet2-subnet --resource-group demotask-rg 
+    --network-security-group vpc2-sg
+
+# Create nic without public ip
+    az network nic create --resource-group demotask-rg --name vnet2-nic2 --vnet-name demotask-vnet2 
+    --subnet vnet2-subnet --network-security-group vpc2-sg
+
+# Create VM on virtual network2 without public access
+    az vm create --resource-group demotask-rg --name vnet2-vm1 --nics vnet2-nic2 --image centos --admin-username vnet2user
+    --admin-password Password123456  --public-ip-sku Basic
+
+# Get ID for virtual network 1 
+    az network vnet show --resource-group demotask-rg --name demotask-vnet1 --query id --out tsv
+    /subscriptions/7003c789-0d22-49f3-a68e-fbb873646947/resourceGroups/demotask-rg/providers/Microsoft.Network/virtualNetworks/demotask-vnet1
+
+# Get ID for virtual network 1
+    az network vnet show --resource-group demotask-rg --name demotask-vnet2 --query id --out tsv
+    /subscriptions/7003c789-0d22-49f3-a68e-fbb873646947/resourceGroups/demotask-rg/providers/Microsoft.Network/virtualNetworks/demotask-vnet2
+
+# Two way VPC Peering for traffic flow between both vpc
+    az network vnet peering create --name vnet1-to-vnet2-peer --resource-group demotask-rg --vnet-name demotask-vnet1
+    --remote-vnet /subscriptions/7003c789-0d22-49f3-a68e-fbb873646947/resourceGroups/demotask-rg/providers/Microsoft.Network/virtualNetworks/demotask-vnet2 --allow-vnet-access
+
+    az network vnet peering create --name vnet2-to-vnet1-peer --resource-group demotask-rg --vnet-name demotask-vnet2
+    --remote-vnet /subscriptions/7003c789-0d22-49f3-a68e-fbb873646947/resourceGroups/demotask-rg/providers/Microsoft.Network/virtualNetworks/demotask-vnet1 --allow-vnet-access
+
+# Login to VM1 with public ip 
+    ssh pubuser@20.219.121.153
+
+# Checking connection for VM2
+    ping 192.168.0.4
+
+# Login to VM2 from VM1 and create some files
+    ssh vnet2user@192.168.121.153
+    touch file1 file2 file3 
+
+# Get list of file from VM2 home path
+    scp -r vnet2user@192.168.0.4:/home/vnet2user .
+
+
+Refrences
+    Azure Documentation
