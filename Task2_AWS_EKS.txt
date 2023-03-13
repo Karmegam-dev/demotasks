@@ -12,63 +12,53 @@ Step2 : Install Eksctl
     -eksctl version
 
 Step3 :Creating cluster
-    -eksctl create cluster --name demoapp-cluster --nodegroup-name ng-demoapp --region ap-south-1 --node-type t2.micro --nodes 3
+    -eksctl create cluster --name ekstask-cluster --nodegroup-name ekstask-ng --region ap-south-1 --node-type t3.micro --nodes 3
     -kubectl get nodes
 
 Step4 :Creating Namespace
-    -kubectl create namespace task-eks
+    -kubectl create namespace ekstask-ns
     -kubectl get namespace  
-    -kubectl config set-context --current --namespace=task-eks
+    -kubectl config set-context --current --namespace=ekstask-ns
     -kubectl config view --minify | grep namespace
 
 Step5 :
-    -kubectl apply -f demotask-deployment.yaml
+    -kubectl apply -f ekstask-deployment.yaml
     -kubectl get deployment
     -kubectl scale deployment --replicas=3 test
 
 Step6 :
-    -kubectl apply -f demotask-service.yaml
+    -kubectl apply -f ekstask-service.yaml
     -kubectl get all
 
 Step7 :
-    -eksctl utils associate-iam-oidc-provider --cluster demoapp-cluster --approve
+    -eksctl utils associate-iam-oidc-provider --cluster ekstask-cluster --approve
     -curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.4.7/docs/install/iam_policy.json
     -aws iam create-policy \
         --policy-name AWSLoadBalancerControllerIAMPolicy \
         --policy-document file://iam_policy.json
     -eksctl create iamserviceaccount \
-        --cluster=demoapp-cluster \
+        --cluster=ekstask-cluster \
         --namespace=kube-system \
         --name=aws-load-balancer-controller \
         --attach-policy-arn=arn:aws:iam::372924336088:policy/AWSLoadBalancerControllerIAMPolicy \
         --override-existing-serviceaccounts \
         --approve
-    -helm repo add eks https://aws.github.io/eks-charts
-    -helm repo update
-    -kubectl apply -k "github.com/aws/eks-charts/stable/aws-load-balancer-controller/crds?ref=master"
-    -helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
-        -n kube-system \
-        --set clusterName=demoapp-cluster \
-        --set serviceAccount.create=false \
-        --set serviceAccount.name=aws-load-balancer-controller 
-        --set region=ap-south-1
-        --set vpcId=
-    -kubectl get deployment -n kube-system aws-load-balancer-controller
+    
+    -kubectl apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v1.7.1/cert-manager.yaml
+
+    -curl -Lo ingress-controller.yaml https://github.com/kubernetes-sigs/aws-load-balancer-controller/releases/download/v2.4.1/v2_4_1_full.yaml
+        -Change cluster name
+        -add annotation to service serviceAccount
+            annotations:
+              eks.amazonaws.com/role-arn: arn:aws:iam::372924336088:role/eksctl-ekstask-cluster-addon-iamserviceaccou-Role1-MA80IPDTJ7Y2
+
+    -kubectl apply -f ingress-controller.yaml
 
 Step8 :
     - kubectl apply -f demotask-ingress.yaml
     - kubectl get ingress
 
-    
 
-eksctl create iamserviceaccount \
-        --cluster=test-cluster \
-        --namespace=kube-system \
-        --name=alb-ingress-controller \
-        --attach-policy-arn=arn:aws:iam::372924336088:policy/AWSLoadBalancerControllerIAMPolicy \
-        --override-existing-serviceaccounts \
-        --approve
-
-curl -sS "https://raw.githubusercontent.com/kubernetes-sigs/aws-alb-ingress-controller/v1.1.4/docs/examples/alb-ingress-controller.yaml" \
-     | sed "s/# - --cluster-name=devCluster/- --cluster-name=test-cluster/g" \
-     | kubectl apply -f -
+Refrences
+    -AWS Documentation
+    -https://aws.amazon.com/premiumsupport/knowledge-center/eks-alb-ingress-controller-setup/# (for AWS load balancer controller on nodegroup)
